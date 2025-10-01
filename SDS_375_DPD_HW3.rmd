@@ -1,0 +1,181 @@
+---
+title: "Homework 3"
+author: "Akash Rajeev"
+date: "2025-09-29"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(knitr)
+library(broom)
+library(colorfindr)
+```
+
+Reading in the data:
+```{r}
+data = read.csv("homework3_data.csv")
+head(data, 5)
+```
+# Setup:
+
+Question: Will redesigning the website lead to an average increase in sales of at least $1.80 per customer? 
+
+### Hypothesis Test 1:
+- H0: The average sales under the redesigned website will be the same as the average sales of the previous website; $\mu_{B} - \mu_{A} = 0$
+- H1: The average sales under the redesigned website will be greater than the average sales of the previous
+website; $\mu_{B} - \mu_{A} > 0$
+
+### Hypothesis Test 2:
+- H0: The difference between the average sales under the redesigned website and the previous website will be
+less than or equal to 1.80; $\mu_{B} - \mu_{A} \le 1.80$
+- H1: The difference between the average sales under the redesigned website and the previous website will be
+greater than 1.80; $\mu_{B} - \mu_{A} > 1.80$
+
+### Testing:
+- T-Test: Because this data is somewhat large (n=200), continuous, and the variances may be unequal, I think 
+Welch's t-test would be a suitable statistical test to measure differences between average sales in the two groups.
+- Linear Regression: Due to covariates, we can also run a linear regression to get a better idea of how design alone may affect sales
+
+\newpage
+
+# Supporting Evidence 1: T-test
+
+### Assumptions
+
+```{r, results = "hold"}
+# check t test assumptions
+sales_new = data$sales[data$design == 1]
+sales_old = data$sales[data$design == 0]
+
+# Check normality 
+par(mfrow = c(1, 2))
+qqnorm(sales_old, main = "Old Design")
+qqline(sales_old)
+qqnorm(sales_new, main = "New Design")
+qqline(sales_new)
+
+# Check variances
+var(sales_old)
+var(sales_new)
+
+```
+
+The QQ plots indicate that these two samples are normal and, as the variances are not drastically different, a Welch's t-test may be an effective option to compare means between the two designs.
+\newpage
+
+### Tests
+
+```{r, results = "hold"}
+# groups
+sales_new = data$sales[data$design == 1]
+sales_old = data$sales[data$design == 0]
+
+# One sided test; is mean_B > mean_A?
+t_res1 = t.test(sales_new, sales_old, alternative = "greater")
+tab_tres1 = tidy(t_res1)
+kable(tab_tres1, caption= "Difference > 0")
+
+# Test vs business threshold; is (meanB - meanA) > 1.80?
+t_res2 = t.test(sales_new, sales_old, alternative = "greater", mu = 1.80)
+tab_tres2 = tidy(t_res2)
+kable(tab_tres2, caption = "Difference > 1.80")
+
+
+
+
+
+```
+### Analysis:
+
+I used 2 t-tests here. The first is a one-sided t-test, to test whether the average sales from the new design were significantly greater than the average sales from the previous design. The table demonstrates that, for this test, we have a value of roughly 3.66,  with a p-value of `r round(tab_tres1["p.value"], 3)`, and a confidence interval of [2.922, inf). This indicates that the average sales for the newer design are significantly greater than the average sales for the previous design.
+
+The second t-test is against the business threshold set; whether the design would yield an average sales increase of $1.80. This t-test produced the same value of 3.66 with a p-value of `r round(tab_tres2["p.value"], 3)`. The 95% CI was [2.92, inf). This indicates that, according to this t-test, the newer design is predicted to increase average sales above the \$1.80 threshold.
+
+\newpage
+
+# Supporting Evidence 2 - Regression
+```{r}
+model = lm(sales ~ factor(design) + items + nps, data = data)
+# summary(model)
+# confint(model)
+model_tab = tidy(model, conf.int = TRUE)
+kable(model_tab, caption = "Model Results")
+```
+### Analysis:
+
+Because there may be other factors that influence average sales besides the website design, I ran a linear regression to identify the coefficient value for design to get a better idea of how changing only the design may impact average sales. As the table demonstrates, the regression shows that the coefficient for the design is around 0.324.  Although it is worth noting that this coefficient is not statistically significant, this regression highlights the idea that items and nps are also likely key drivers of higher sales, in addition to the website design.
+
+The previous t-test found that updating the design led to a significant increase in sales above $1.80 per customer, however this regression conveys that that increase may not be solely attributed to changing the website design, but also to an increase in nps and items sold that may occur as a result of changing the website design.
+
+
+
+# Plots
+
+```{r}
+# company website: USPS
+usps_colors = get_colors("usps_website.png")
+# plot_colors(usps_colors[1:100, ])
+cols = make_palette(usps_colors[1:100, ])
+```
+
+
+### Plot 1 -- Sales Distribution by design
+
+```{r, warning=FALSE}
+data$design = factor(data$design, levels = c(0, 1), labels = c("Old Design", "New Design"))
+
+p1 = ggplot(data, aes(x = sales, fill = design)) +
+  geom_histogram(alpha = 0.6, position = "identity", bins = 20, color = "white") +
+  scale_fill_manual(values = cols[c(3,7)]) +
+  labs(
+    title = "Sales Distribution by Website Design",
+    x = "Sales ($)",
+    y = "Frequency",
+    fill = "Design"
+  ) +
+  theme_minimal(base_size = 14) 
+
+p1
+
+```
+
+This histogram demonstrates that the newer design tends to have a greater amount of sales, as can be seen by the right-skew of the pink histogram when compared to the purple histogram. The pink histogram shows more outliers to the right, indicating that there may be more sales in the newly designed website.
+
+### Plot 2 - Sales distribution boxplot
+
+```{r, warning=FALSE, message=FALSE}
+p2 = ggplot(data, aes(x = design, y = sales, fill = design)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = cols[c(3, 7)]) +
+  labs(
+    title = "Sales Distribution by Website Design",
+    x = "Website Design",
+    y = "Sales ($)",
+    fill = "Design"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")  
+
+p2
+```
+
+This boxplot which compares the sales between the old design and the new design demonstrates that the newer design appears to have a greater median sales. In addition, the new design appears to be shifted "up" compared to the older design, indicating that the newer design may be connected to greater sales.
+
+\newpage
+
+# Primary Recommendation:
+- I recommend that the company commit to the redesign
+
+- I think that through the redesign, the company will see a average sales increase of \$3.66, and therefore meet the target \$1.80 average increase in sales
+
+- Based on the historical data, the redesigned site is associated with an average increase in sales of \$3.66 per customer (95% CI ~ [\$2.78, \$4.55]), which exceeds the company’s \$1.80 threshold. However, regression  indicates a portion of that increase may also be the result of a higher number of items purchased and higher NPS. The direct design coefficient seems to be only about $0.32 and not statistically significant. Therefore, it seems that the design change alone may not directly increase sales per item to the threshold level of 1.80, but may contribute to reaching the threshold by boosting sales numbers and nps, which in turn may lead to the threshold being reached. In addition, the histograms and boxplots demonstrate that the mean/median of the new designed website is greater than their previous design counterpart, supporting the idea that redesigning the website may lead to increased sales.
+
+
+# Alternative Statement:
+
+The redesign will not increase sales by at least $1.80; the apparent increase in sales may be due to potential
+confounders, mediators, etc. that impact the target value.
